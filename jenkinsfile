@@ -1,0 +1,37 @@
+pipeline {
+  agent any
+
+  environment {
+    IMAGE_NAME = "sujeet/frontend"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        git 'https://github.com/your-repo/frontend.git'
+      }
+    }
+
+    stage('Build') {
+      steps {
+        sh 'npm install'
+        sh 'npm run build'
+      }
+    }
+
+    stage('Docker Build') {
+      steps {
+        sh 'docker build -t $IMAGE_NAME:latest .'
+      }
+    }
+
+    stage('Docker Push') {
+      steps {
+        withCredentials([string(credentialsId: 'dockerhub-pass', variable: 'PASS')]) {
+          sh 'echo $PASS | docker login -u sujeet --password-stdin'
+          sh 'docker push $IMAGE_NAME:latest'
+        }
+      }
+    }
+  }
+}
