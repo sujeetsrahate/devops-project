@@ -2,13 +2,13 @@ pipeline {
   agent any
 
   environment {
-    IMAGE_NAME = "sujeet/frontend"
+    IMAGE_NAME = "sujeetsr07/frontend"
   }
 
   stages {
     stage('Checkout') {
       steps {
-        git 'https://github.com/your-repo/frontend.git'
+        git 'https://github.com/sujeetsrahate/devops-project/frontend.git'
       }
     }
 
@@ -28,7 +28,7 @@ pipeline {
     stage('Docker Push') {
       steps {
         withCredentials([string(credentialsId: 'dockerhub-pass', variable: 'PASS')]) {
-          sh 'echo $PASS | docker login -u sujeet --password-stdin'
+          sh 'echo $PASS | docker login -u sujeetsr07 --password-stdin'
           sh 'docker push $IMAGE_NAME:latest'
         }
       }
