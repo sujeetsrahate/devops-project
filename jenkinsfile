@@ -7,16 +7,15 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "sujeetsr07/frontend"
-        IMAGE_TAG    = "latest"
-        AWS_REGION   = "us-east-1"
-        EKS_CLUSTER  = "three-tier-cluster"
+        IMAGE_TAG    = "latest"        // recommended: use ${BUILD_NUMBER}
+        GIT_BRANCH   = "main"
     }
 
     stages {
 
         stage('Checkout Code') {
             steps {
-                git branch: 'main',
+                git branch: "${GIT_BRANCH}",
                     url: 'https://github.com/sujeetsrahate/devops-project',
                     credentialsId: 'github-app-creds'
             }
@@ -58,35 +57,38 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes (EKS)') {
+        stage('Update Deployment YAML (GitOps)') {
             steps {
-                withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-creds']
-                ]) {
-                    sh '''
-                      echo "Updating kubeconfig from EKS..."
-                      aws eks update-kubeconfig \
-                        --region ${AWS_REGION} \
-                        --name ${EKS_CLUSTER}
+                sh '''
+                  echo "Cleaning workspace noise"
+                  git restore frontend/ || true
 
-                      echo "Checking cluster access..."
-                      kubectl get nodes
+                  echo "Updating image in k8s/frontend.yaml"
+                  sed -i "s|image: .*|image: ${DOCKER_IMAGE}:${IMAGE_TAG}|" k8s/frontend.yaml
 
-                      echo "Deploying frontend..."
-                      kubectl apply -f k8s/frontend.yaml
-                    '''
-                }
+                  echo "Checking if manifest actually changed"
+                  if git diff --quiet k8s/frontend.yaml; then
+                    echo "No image change detected. Skipping Git commit."
+                    exit 0
+                  fi
+
+                  git config user.email "jenkins@ci.local"
+                  git config user.name "jenkins"
+
+                  git add k8s/frontend.yaml
+                  git commit -m "ci: update frontend image to ${DOCKER_IMAGE}:${IMAGE_TAG}"
+                  git push origin ${GIT_BRANCH}
+                '''
             }
         }
     }
 
     post {
         success {
-            echo "✅ CI/CD pipeline completed successfully"
+            echo "✅ CI pipeline completed successfully. Argo CD will reconcile automatically."
         }
         failure {
-            echo "❌ CI/CD pipeline failed"
+            echo "❌ CI pipeline failed"
         }
     }
 }
