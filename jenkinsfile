@@ -6,9 +6,10 @@ pipeline {
     }
 
     environment {
-        DOCKER_IMAGE = "sujeetsr07/frontend"
-        IMAGE_TAG    = "latest"        // recommended: use ${BUILD_NUMBER}
+        DOCKER_IMAGE = "sujeetsr07/frontend2"
+        IMAGE_TAG    = "${BUILD_NUMBER}"   // BEST PRACTICE
         GIT_BRANCH   = "main"
+        GIT_REPO     = "github.com/sujeetsrahate/devops-project.git"
     }
 
     stages {
@@ -16,7 +17,7 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 git branch: "${GIT_BRANCH}",
-                    url: 'https://github.com/sujeetsrahate/devops-project',
+                    url: "https://${GIT_REPO}",
                     credentialsId: 'github-app-creds'
             }
         }
@@ -59,36 +60,47 @@ pipeline {
 
         stage('Update Deployment YAML (GitOps)') {
             steps {
-                sh '''
-                  echo "Cleaning workspace noise"
-                  git restore frontend/ || true
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-push-creds',
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_TOKEN'
+                )]) {
+                    sh '''
+                      echo "Cleaning workspace noise"
+                      git restore frontend/ || true
 
-                  echo "Updating image in k8s/frontend.yaml"
-                  sed -i "s|image: .*|image: ${DOCKER_IMAGE}:${IMAGE_TAG}|" k8s/frontend.yaml
+                      echo "Updating image in k8s/frontend.yaml"
+                      sed -i "s|image: .*|image: ${DOCKER_IMAGE}:${IMAGE_TAG}|" k8s/frontend.yaml
 
-                  echo "Checking if manifest actually changed"
-                  if git diff --quiet k8s/frontend.yaml; then
-                    echo "No image change detected. Skipping Git commit."
-                    exit 0
-                  fi
+                      echo "Checking if manifest actually changed"
+                      if git diff --quiet k8s/frontend.yaml; then
+                        echo "No image change detected. Skipping Git commit."
+                        exit 0
+                      fi
 
-                  git config user.email "jenkins@ci.local"
-                  git config user.name "jenkins"
+                      git config user.email "jenkins@ci.local"
+                      git config user.name "jenkins"
 
-                  git add k8s/frontend.yaml
-                  git commit -m "ci: update frontend image to ${DOCKER_IMAGE}:${IMAGE_TAG}"
-                  git push origin ${GIT_BRANCH}
-                '''
+                      git add k8s/frontend.yaml
+                      git commit -m "ci: update frontend image to ${DOCKER_IMAGE}:${IMAGE_TAG}"
+
+                      git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@${GIT_REPO}
+                      git push origin ${GIT_BRANCH}
+                    '''
+                }
             }
         }
     }
 
     post {
         success {
-            echo "CI pipeline completed successfully. Argo CD will reconcile automatically."
+            echo "CI pipeline completed successfully. Argo CD will sync automatically 🚀"
         }
         failure {
             echo " CI pipeline failed"
+        }
+        always {
+            sh 'docker logout || true'
         }
     }
 }
