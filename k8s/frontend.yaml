@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: sujeetsr07/frontend5:10
+        image: sujeetsr07/frontend5:11
         ports:
         - containerPort: 80
